@@ -1,6 +1,4 @@
-package grpc_pool
-
-// grpc 连接池
+package main
 
 import (
 	"errors"
@@ -51,6 +49,7 @@ type GRpcClientPool struct {
 	sync.Mutex
 }
 
+// NewGRpcClientPool create new pool
 func NewGRpcClientPool(addr string, opts []grpc.DialOption, dialF DialFunc, maxCount int, idleTimeout time.Duration) *GRpcClientPool {
 	return &GRpcClientPool{
 		pool: make([]*IdleClient, 0),
@@ -76,6 +75,7 @@ type IdleClient struct {
 	conn *grpc.ClientConn
 }
 
+// NewIdleClient create new client
 func NewIdleClient(conn *grpc.ClientConn, client interface{}) *IdleClient {
 	return &IdleClient{
 		Client: client,
@@ -83,6 +83,7 @@ func NewIdleClient(conn *grpc.ClientConn, client interface{}) *IdleClient {
 	}
 }
 
+// idleTimeout return true if timeout
 func (c *IdleClient) idleTimeout(idle time.Duration) bool {
 	if c.lastCalledTime.Add(idle).After(time.Now()) {
 		return false
@@ -120,7 +121,9 @@ func (p *GRpcClientPool) Get() (c *IdleClient, err error) {
 			break
 		} else {
 			c.close()
-			p.count--
+			if p.count > 0 {
+				p.count--
+			}
 		}
 		index++
 	}
@@ -158,7 +161,9 @@ func (p *GRpcClientPool) Put(c *IdleClient) error {
 
 	if err := c.checkValid(); err != nil {
 		c.close()
-		p.count--
+		if p.count > 0 {
+			p.count--
+		}
 		return ERROR_INVALID_CLIENT
 	}
 
@@ -170,19 +175,28 @@ func (p *GRpcClientPool) Put(c *IdleClient) error {
 
 // DelErrorClient if rpc request get error, you SHOULD call this func manual
 func (p *GRpcClientPool) DelErrorClient(c *IdleClient) {
+	if c == nil {
+		return
+	}
+
 	c.close()
 	p.Lock()
-	p.count--
+	if p.count > 0 {
+		p.count--
+	}
 	p.Unlock()
 }
 
+// Release release all conn
 func (p *GRpcClientPool) Release() {
 	p.Lock()
 	defer p.Unlock()
 
 	for _, c := range p.pool {
-		c.close()
-		p.count--
+		if c != nil {
+			c.close()
+		}
 	}
+	p.count = 0
 	p.pool = make([]*IdleClient, 0)
 }
