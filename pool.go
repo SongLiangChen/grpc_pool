@@ -1,4 +1,4 @@
-package main
+package grpc_pool
 
 import (
 	"errors"
@@ -51,6 +51,10 @@ type GRpcClientPool struct {
 
 // NewGRpcClientPool create new pool
 func NewGRpcClientPool(addr string, opts []grpc.DialOption, dialF DialFunc, maxCount int, idleTimeout time.Duration) *GRpcClientPool {
+	if opts == nil || len(opts) == 0 {
+		opts = []grpc.DialOption{grpc.WithInsecure()}
+	}
+
 	return &GRpcClientPool{
 		pool: make([]*IdleClient, 0),
 
@@ -61,7 +65,7 @@ func NewGRpcClientPool(addr string, opts []grpc.DialOption, dialF DialFunc, maxC
 		idleTimeout: idleTimeout,
 
 		addr: addr,
-		opts: append([]grpc.DialOption{}, opts...),
+		opts: opts,
 	}
 }
 
