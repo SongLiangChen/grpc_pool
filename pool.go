@@ -150,7 +150,7 @@ func (p *GRpcClientPool) Get() (c *IdleClient, err error) {
 	return
 }
 
-// Put put a client to pool
+// Put put a client to pool.
 func (p *GRpcClientPool) Put(c *IdleClient) error {
 	if c == nil {
 		return ERROR_NIL_CLIENT
