@@ -32,7 +32,7 @@ Install grpc_pool with go tool:
 ```
 
 ## Usage
-To use grpc_pool, you need import the package and design your DialFunc and create new pool instance,
+To use grpc_pool, you need import the package and design your 'DialFunc' or use the 'DefaultDialFunc' and create new pool instance,
 The complete example is as follows:
 ```go
 package main
@@ -46,24 +46,25 @@ import (
 	"github.com/SongLiangChen/grpc_pool"
 )
 
-func Dial(addr string, opts ...grpc.DialOption) (*grpc_pool.IdleClient, error) {
-	conn, err := grpc.Dial(addr, opts...)
+func Dial(addr string) (*grpc.ClientConn, error) {
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithTimeout())
 	if err != nil {
 		return nil, err
 	}
 
-	c := NewGreeterClient(conn) // Replace to your own GRpc Client Func
-	return grpc_pool.NewIdleClient(conn, c), nil
+	return conn, nil
 }
 
 func main() {
-	pool := grpc_pool.NewGRpcClientPool("127.0.0.1:8080", []grpc.DialOption{grpc.WithInsecure()}, Dial, 5, time.Second*10)
+	pool := grpc_pool.NewGRpcClientPool("127.0.0.1:8080", Dial, 5, time.Second*10)
+	// pool := grpc_pool.NewGRpcClientPool("127.0.0.1:8080", grpc_pool.DefaultDialFunc, 5, time.Second*10)
+	// pool := grpc_pool.NewGRpcClientPool("127.0.0.1:8080", nil, 5, time.Second*10)
 	
 	if c, err := pool.Get(); err == nil {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		r, err := c.Client.(GreeterClient).SayHello(ctx, &HelloRequest{Name: "SongLiangChen"})
+		r, err := NewGreeterClient(c.GetConn()).SayHello(ctx, &HelloRequest{Name: "SongLiangChen"}) // Replace 'NewGreeterClient' to your own func
 		if err != nil {
 			// Invoke DelErrorClient func activity when any error happy
 			pool.DelErrorClient(c)

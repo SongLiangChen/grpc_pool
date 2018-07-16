@@ -7,21 +7,10 @@ import (
 
 	"github.com/SongLiangChen/grpc_pool"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
-func Dialfunc(addr string, opts ...grpc.DialOption) (*grpc_pool.IdleClient, error) {
-	conn, err := grpc.Dial(addr, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	c := NewGreeterClient(conn)
-	return grpc_pool.NewIdleClient(conn, c), nil
-}
-
 func main() {
-	var pool = grpc_pool.NewGRpcClientPool("127.0.0.1:8080", []grpc.DialOption{grpc.WithInsecure()}, Dialfunc, 5, time.Second*10)
+	var pool = grpc_pool.NewGRpcClientPool("127.0.0.1:8080", nil, 5, time.Second*10)
 	defer pool.Release()
 
 	wg := sync.WaitGroup{}
@@ -33,7 +22,7 @@ func main() {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				r, err := c.Client.(GreeterClient).SayHello(ctx, &HelloRequest{Name: "SongLiangChen"})
+				r, err := NewGreeterClient(c.GetConn()).SayHello(ctx, &HelloRequest{Name: "SongLiangChen"})
 				if err != nil {
 					pool.DelErrorClient(c)
 

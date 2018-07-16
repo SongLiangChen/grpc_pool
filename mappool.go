@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"google.golang.org/grpc"
 )
 
 type MapPool struct {
@@ -22,19 +20,15 @@ type MapPool struct {
 	// Idle duration, client will be remove after idleTimeout from last used time
 	idleTimeout time.Duration
 
-	// Some option, see "google.golang.org/grpc.DialOption"
-	opts []grpc.DialOption
-
 	sync.RWMutex
 }
 
-func NewMapPool(dial DialFunc, opts []grpc.DialOption, maxCount int, idleTimeout time.Duration) *MapPool {
+func NewMapPool(dial DialFunc, maxCount int, idleTimeout time.Duration) *MapPool {
 	return &MapPool{
 		pools:       make(map[string]*GRpcClientPool),
 		dialF:       dial,
 		maxCount:    maxCount,
 		idleTimeout: idleTimeout,
-		opts:        opts,
 	}
 }
 
@@ -53,7 +47,7 @@ func (mp *MapPool) getPool(addr string) (*GRpcClientPool, error) {
 func (mp *MapPool) GetPool(addr string) *GRpcClientPool {
 	p, err := mp.getPool(addr)
 	if err != nil {
-		p = NewGRpcClientPool(addr, mp.opts, mp.dialF, mp.maxCount, mp.idleTimeout)
+		p = NewGRpcClientPool(addr, mp.dialF, mp.maxCount, mp.idleTimeout)
 		mp.Lock()
 		mp.pools[addr] = p
 		mp.Unlock()

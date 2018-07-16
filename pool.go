@@ -17,16 +17,14 @@ var (
 )
 
 // FOR EXAMPLE:
-// func Dialfunc(addr string, opts ...grpc.DialOption) (*IdleClient, error) {
-// 	conn, err := grpc.Dial(addr, opts...)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	c := NewExampleGRpcClient(conn)
-// 	return NewIdleClient(conn, c), nil
+// func Dialfunc(addr string) (*grpc.ClientConn, error) {
+//	return grpc.Dial(addr, grpc.WithInsecure(), grpc.WithTimeout())
 // }
-type DialFunc func(string, ...grpc.DialOption) (*IdleClient, error)
+type DialFunc func(string) (*grpc.ClientConn, error)
+
+func DefaultDialFunc(addr string) (*grpc.ClientConn, error) {
+	return grpc.Dial(addr, grpc.WithInsecure())
+}
 
 // GRpcClientPool is a pool that manage connections to rpc server.
 // cache and remove idle timeout connection, and keep the conn num
@@ -47,15 +45,13 @@ type GRpcClientPool struct {
 
 	// Rpc server address
 	addr string
-	// Some option, see "google.golang.org/grpc.DialOption"
-	opts []grpc.DialOption
 
 	sync.Mutex
 }
 
-func NewGRpcClientPool(addr string, opts []grpc.DialOption, dialF DialFunc, maxCount int, idleTimeout time.Duration) *GRpcClientPool {
-	if opts == nil || len(opts) == 0 {
-		opts = []grpc.DialOption{grpc.WithInsecure()}
+func NewGRpcClientPool(addr string, dialF DialFunc, maxCount int, idleTimeout time.Duration) *GRpcClientPool {
+	if dialF == nil {
+		dialF = DefaultDialFunc
 	}
 
 	return &GRpcClientPool{
@@ -68,7 +64,6 @@ func NewGRpcClientPool(addr string, opts []grpc.DialOption, dialF DialFunc, maxC
 		idleTimeout: idleTimeout,
 
 		addr: addr,
-		opts: opts,
 	}
 }
 
@@ -77,16 +72,17 @@ type IdleClient struct {
 	// Last time be called
 	lastCalledTime time.Time
 
-	// True grpc client
-	Client interface{}
 	// Socket conn
 	conn *grpc.ClientConn
 }
 
-func NewIdleClient(conn *grpc.ClientConn, client interface{}) *IdleClient {
+func (c *IdleClient) GetConn() *grpc.ClientConn {
+	return c.conn
+}
+
+func newIdleClient(conn *grpc.ClientConn) *IdleClient {
 	return &IdleClient{
-		Client: client,
-		conn:   conn,
+		conn: conn,
 	}
 }
 
@@ -140,10 +136,11 @@ func (p *GRpcClientPool) Get() (c *IdleClient, err error) {
 			return nil, ERROR_MAX_CLIENT_COUNT
 		}
 
-		c, err = p.dialF(p.addr, p.opts...)
+		cc, err := p.dialF(p.addr)
 		if err != nil {
 			return nil, err
 		}
+		c = newIdleClient(cc)
 		c.updateLastCalledTime()
 
 		p.count++
