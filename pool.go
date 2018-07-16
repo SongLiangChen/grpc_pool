@@ -1,4 +1,6 @@
-package grpc_pool
+package main
+
+// grpc 连接池
 
 import (
 	"errors"
@@ -14,8 +16,6 @@ var (
 	ERROR_NIL_CLIENT       = errors.New("Client is nil")
 )
 
-type DialFunc func(string, ...grpc.DialOption) (*IdleClient, error)
-
 // FOR EXAMPLE:
 // func Dialfunc(addr string, opts ...grpc.DialOption) (*IdleClient, error) {
 // 	conn, err := grpc.Dial(addr, opts...)
@@ -26,30 +26,33 @@ type DialFunc func(string, ...grpc.DialOption) (*IdleClient, error)
 // 	c := NewExampleGRpcClient(conn)
 // 	return NewIdleClient(conn, c), nil
 // }
+type DialFunc func(string, ...grpc.DialOption) (*IdleClient, error)
 
+// GRpcClientPool is a pool that manage connections to rpc server.
+// cache and remove idle timeout connection, and keep the conn num
+// not over maxCount.
 type GRpcClientPool struct {
-	// pool
+	// Connections to rpc server
 	pool []*IdleClient
 
-	// dial function
+	// Dial function, use to create new conn
 	dialF DialFunc
 
-	// max size of pool
+	// Max size of pool
 	maxCount int
-	// current count of client in pool
+	// Valid conn num in pool for now
 	count int
-	// idle duration, client will be remove after idleTimeout if not be used
+	// Idle duration, client will be remove after idleTimeout from last used time
 	idleTimeout time.Duration
 
-	// dial addr
+	// Rpc server address
 	addr string
-	// some option
+	// Some option, see "google.golang.org/grpc.DialOption"
 	opts []grpc.DialOption
 
 	sync.Mutex
 }
 
-// NewGRpcClientPool create new pool
 func NewGRpcClientPool(addr string, opts []grpc.DialOption, dialF DialFunc, maxCount int, idleTimeout time.Duration) *GRpcClientPool {
 	if opts == nil || len(opts) == 0 {
 		opts = []grpc.DialOption{grpc.WithInsecure()}
@@ -69,17 +72,17 @@ func NewGRpcClientPool(addr string, opts []grpc.DialOption, dialF DialFunc, maxC
 	}
 }
 
+// IdleClient is the implement of connection of rpc server
 type IdleClient struct {
-	// last time be called
+	// Last time be called
 	lastCalledTime time.Time
 
-	// true grpc client
+	// True grpc client
 	Client interface{}
-	// socket conn
+	// Socket conn
 	conn *grpc.ClientConn
 }
 
-// NewIdleClient create new client
 func NewIdleClient(conn *grpc.ClientConn, client interface{}) *IdleClient {
 	return &IdleClient{
 		Client: client,
@@ -87,7 +90,6 @@ func NewIdleClient(conn *grpc.ClientConn, client interface{}) *IdleClient {
 	}
 }
 
-// idleTimeout return true if timeout
 func (c *IdleClient) idleTimeout(idle time.Duration) bool {
 	if c.lastCalledTime.Add(idle).After(time.Now()) {
 		return false
@@ -113,12 +115,12 @@ func (c *IdleClient) close() {
 	c.conn.Close()
 }
 
-// Get get a client from pool, if pool size if zero, then create a new conn for client
+// Get return a valid connection of rpc server, or an error
 func (p *GRpcClientPool) Get() (c *IdleClient, err error) {
 	p.Lock()
 	defer p.Unlock()
 
-	// del the idle timeout conn
+	// del stale conns
 	index := 0
 	for _, c := range p.pool {
 		if !c.idleTimeout(p.idleTimeout) {
@@ -154,7 +156,7 @@ func (p *GRpcClientPool) Get() (c *IdleClient, err error) {
 	return
 }
 
-// Put put a client to pool.
+// Put give back connection to pool
 func (p *GRpcClientPool) Put(c *IdleClient) error {
 	if c == nil {
 		return ERROR_NIL_CLIENT
@@ -177,7 +179,7 @@ func (p *GRpcClientPool) Put(c *IdleClient) error {
 	return nil
 }
 
-// DelErrorClient if rpc request get error, you SHOULD call this func manual
+// DelErrorClient handle an invalid connection, you SHOULD call this func manual
 func (p *GRpcClientPool) DelErrorClient(c *IdleClient) {
 	if c == nil {
 		return
@@ -191,7 +193,6 @@ func (p *GRpcClientPool) DelErrorClient(c *IdleClient) {
 	p.Unlock()
 }
 
-// Release release all conn
 func (p *GRpcClientPool) Release() {
 	p.Lock()
 	defer p.Unlock()

@@ -1,4 +1,4 @@
-package grpc_pool
+package main
 
 import (
 	"errors"
@@ -10,19 +10,19 @@ import (
 )
 
 type MapPool struct {
-	// pools
+	// Multiple pools
 	pools map[string]*GRpcClientPool
 
-	// dial function
+	// Dial function, use to create new conn
 	dialF DialFunc
 
-	// max size of pool
+	// Max size of pool
 	maxCount int
 
-	// idle duration, client will be remove after idleTimeout if not be used
+	// Idle duration, client will be remove after idleTimeout from last used time
 	idleTimeout time.Duration
 
-	// some option
+	// Some option, see "google.golang.org/grpc.DialOption"
 	opts []grpc.DialOption
 
 	sync.RWMutex
