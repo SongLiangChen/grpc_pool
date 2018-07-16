@@ -1,10 +1,8 @@
 # grpc_pool
-a pool of grpc client
+grpc_pool is a golang implementation of grpc connection pool, it create and manage connections automatic.
 
-## usage
-### 创建连接池
-
-假设pb文件如下：
+## proto file
+We assume the proto file like below:
 ```
 syntax = "proto3";
 
@@ -27,38 +25,53 @@ message HelloReply {
 }
 ```
 
-1. 首先构建一个连接函数，当需要创建新的连接时，连接池将使用该函数
+## Installation
+Install grpc_pool with go tool:
 ```
+    go get github.com/SongLiangChen/grpc_pool
+```
+
+## Usage
+To use grpc_pool, you need import the package and design your DialFunc and create new pool instance,
+The complete example is as follows:
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"github.com/SongLiangChen/grpc_pool"
+)
+
 func Dial(addr string, opts ...grpc.DialOption) (*grpc_pool.IdleClient, error) {
 	conn, err := grpc.Dial(addr, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	c := NewGreeterClient(conn) // 对应你自己的rpc client
+	c := NewGreeterClient(conn) // Replace to your own GRpc Client Func
 	return grpc_pool.NewIdleClient(conn, c), nil
 }
-```
 
-2. 创建连接池
-```
-pool := grpc_pool.NewGRpcClientPool("127.0.0.1:8080", []grpc.DialOption{grpc.WithInsecure()}, Dial, 5, time.Second*10)
-```
+func main() {
+	pool := grpc_pool.NewGRpcClientPool("127.0.0.1:8080", []grpc.DialOption{grpc.WithInsecure()}, Dial, 5, time.Second*10)
+	
+	if c, err := pool.Get(); err == nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-### 使用连接池
-```
-if c, err := pool.Get(); err == nil {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+		r, err := c.Client.(GreeterClient).SayHello(ctx, &HelloRequest{Name: "SongLiangChen"})
+		if err != nil {
+			// Invoke DelErrorClient func activity when any error happy
+			pool.DelErrorClient(c)
 
-	r, err := c.Client.(GreeterClient).SayHello(ctx, &HelloRequest{Name: "SongLiangChen"})
-	if err != nil {
-		// 发生错误主动调用DelErrorClient函数
-		pool.DelErrorClient(c)
-
-	} else {
-		fmt.Println(r.Message)
-		pool.Put(c)
+		} else {
+			fmt.Println(r.Message)
+			pool.Put(c)
+		}
 	}
 }
 ```
