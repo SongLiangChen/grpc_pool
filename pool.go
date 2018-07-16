@@ -1,4 +1,4 @@
-package main
+package grpc_pool
 
 // grpc 连接池
 
