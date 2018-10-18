@@ -132,7 +132,7 @@ func (p *GRpcClientPool) Get() (c *IdleClient, err error) {
 	p.pool = p.pool[index:]
 
 	if len(p.pool) == 0 { // create new conn
-		if p.count >= p.maxCount {
+		if p.count >= p.maxCount && p.maxCount > 0 {
 			return nil, ERROR_MAX_CLIENT_COUNT
 		}
 
